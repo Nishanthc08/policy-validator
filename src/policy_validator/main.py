@@ -2,7 +2,7 @@
 """Cybersecurity Policy Validator desktop application.
 
 Version: 1.0.0
-Copyright (c) 2025 Your Organization
+Copyright (c) 2025 Nishanth C
 License: MIT
 
 This module implements a PyQt6-based GUI application for validating cybersecurity
@@ -10,27 +10,63 @@ policy documents against various standards (NIST SP 800-53, ISO 27001, SOC 2).
 It provides a user-friendly interface for loading, analyzing, and validating 
 policy documents in different formats (PDF, DOCX, TXT).
 
-GUI Components:
-    - DropZone: Drag-and-drop file upload area
-    - ValidationStandards: Standard selection dropdown
-    - SectionCheckboxes: Section selection area
-    - StatusArea: Validation results display
-    - ActionButtons: Validate and Clear controls
+GUI Components Architecture:
+    - PolicyValidatorApp: Main application window and controller
+        - DropZone: Drag-and-drop file upload area with visual feedback
+        - StandardSelector: Dropdown for selecting validation standards
+        - SectionCheckboxes: Dynamic checkboxes for selecting policy sections
+        - StatusArea: Rich text area for validation results and messages
+        - ActionButtons: Controls for validation and clearing
+
+Event Handling System:
+    - Signal/Slot connections for user interactions
+    - Direct event handlers for drag/drop operations
+    - Custom status logging system for operation feedback
+    - Validation triggers based on file loading and button clicks
+
+Validation Workflow:
+    1. File Loading Phase:
+       - User drops files or selects via file browser
+       - MIME type detection and validation
+       - File content type verification
+       - Size and basic sanity checks
+       
+    2. Standard Selection Phase:
+       - User selects validation standard
+       - Section checkboxes dynamically update
+       - User selects which sections to validate
+       
+    3. Validation Execution Phase:
+       - Type-specific validation triggered per file
+       - Content extraction and analysis
+       - Section presence verification
+       - Structure validation based on standard requirements
+       
+    4. Results Reporting Phase:
+       - Status area updates with validation results
+       - Success/warning/error indicators
+       - Detailed issue reporting
+       - Summary statistics
 
 Example:
     Run the module directly to start the application:
         $ python -m policy_validator.main
+    
+    Or import and run programmatically:
+        >>> from policy_validator.main import run_application
+        >>> run_application()
 
 Attributes:
-    SUPPORTED_FORMATS (list): List of supported file extensions
-    DEFAULT_STANDARD (str): Default validation standard to use
+    SUPPORTED_EXTENSIONS (set): Set of supported file extensions
     MIN_FILE_SIZE (int): Minimum acceptable file size in bytes
+    MIME_TYPE_MAPPING (dict): Mapping of MIME types to internal types
+    STATUS_ICONS (dict): Unicode icons for different status levels
 
 Dependencies:
-    - PyQt6: GUI framework
-    - python-magic: File type detection
-    - PyPDF2: PDF parsing
-    - python-docx: Word document parsing
+    - PyQt6: GUI framework for all interface components
+    - python-magic: File type detection and MIME analysis
+    - PyPDF2: PDF content extraction and analysis
+    - python-docx: Word document parsing and content extraction
 
 Constants:
     VALIDATION_STANDARDS: Dictionary defining validation requirements:
@@ -42,22 +78,36 @@ Constants:
             }
         }
     
-    FILE_TYPE_MAPPING: Dictionary mapping MIME types to internal file types:
+    MIME_TYPE_MAPPING: Dictionary mapping MIME types to internal file types:
         {
-            "application/pdf": "pdf",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-            "application/msword": "doc",
-            "text/plain": "txt"
+            "application/pdf": ("pdf", ".pdf"),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ("docx", ".docx"),
+            "application/msword": ("doc", ".doc"),
+            "text/plain": ("txt", ".txt")
         }
 
 Implementation Notes:
     - GUI operations run in the main thread
     - File validation is performed synchronously
-    - Future improvements could include:
-        - Asynchronous file processing
-        - Progress bars for large files
-        - Background validation workers
-        - Real-time validation updates
+    - Error handling ensures application stability
+    - Thread-safety considerations in status logging
+    
+Future Improvements:
+    - Asynchronous file processing using QThreadPool
+    - Progress bars for large files
+    - Background validation workers
+    - Real-time validation updates
+    - Enhanced PDF and Word document parsing
+    - Support for additional file formats
+    - More detailed validation reporting
+    - Export of validation results
+    - Integration with external validation services
+
+Performance Considerations:
+    - Large PDF files may cause UI freezes during processing
+    - Word document parsing can be memory-intensive
+    - Status area updates are optimized for large output
+    - Section checkbox creation is optimized for dynamic updates
 """
 
 import sys
@@ -100,109 +150,230 @@ class DropZone(QFrame):
 
     Handles drag-and-drop operations for policy document files with visual feedback
     during drag operations. Also provides a browse button for manual file selection.
+    
+    This widget inherits from QFrame to provide border styling and visual feedback.
+    It implements the necessary event handlers to process drag and drop operations
+    and communicates with the parent application to process dropped files.
 
     Events:
-        dragEnterEvent: Updates visual style when files are dragged over
-        dragLeaveEvent: Restores normal style when drag exits
+        dragEnterEvent: Updates visual style when files are dragged over the widget
+        dragLeaveEvent: Restores normal style when drag operation exits the widget
         dropEvent: Processes dropped files and sends them to main application
         
     Visual States:
         Normal: Light gray background with dashed border
-        Hover: Blue border highlight
-        Drag Active: Light blue background with blue border
+        Hover: Blue border highlight when mouse is over the widget
+        Drag Active: Light blue background with blue border during active drag
+        
+    UI Components:
+        - Instructions label: Text prompting the user to drag files
+        - Browse button: Alternative method for file selection via dialog
+        
+    User Interactions:
+        - Drag and drop: User can drag files directly onto the widget
+        - Browse button: Opens file dialog for traditional file selection
+        - Visual feedback: Widget appearance changes to indicate valid drops
+        
+    Communication:
+        - Calls main_app.process_files() when files are dropped or selected
+        - Receives no direct feedback from parent - status is shown elsewhere
     """
     
     def __init__(self, parent=None):
+        """Initialize the drop zone widget.
+        
+        Args:
+            parent: The parent widget, typically the main application window.
+                   Used to call back to the main app for file processing.
+        
+        Attributes:
+            main_app: Reference to the parent application
+            drop_label: QLabel with instructions for the user
+            browse_button: QPushButton for manual file selection
+        """
         super().__init__(parent)
-        self.main_app = parent  # Store reference to the main app
-        self.setAcceptDrops(True)
-        self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setFrameShadow(QFrame.Shadow.Sunken)
-        self.setMinimumHeight(150)
+        # Store reference to the main app for callbacks
+        self.main_app = parent  
+        
+        # Configure frame appearance and behavior
+        self.setAcceptDrops(True)  # Enable drop operations
+        self.setFrameShape(QFrame.Shape.StyledPanel)  # Visual frame style
+        self.setFrameShadow(QFrame.Shadow.Sunken)  # Add depth to the frame
+        self.setMinimumHeight(150)  # Ensure enough drop target area
+        
+        # Set initial visual style with CSS
         self.setStyleSheet(
             "QFrame {"
-            "  background-color: #f0f0f0;"
-            "  border: 2px dashed #aaaaaa;"
-            "  border-radius: 5px;"
+            "  background-color: #f0f0f0;"  # Light gray background
+            "  border: 2px dashed #aaaaaa;"  # Dashed border to indicate drop area
+            "  border-radius: 5px;"  # Rounded corners
             "}"
             "QFrame:hover {"
-            "  border-color: #3498db;"
+            "  border-color: #3498db;"  # Blue border on hover for feedback
             "}"
         )
         
-        # Layout for the drop zone
+        # Create vertical layout for drop zone components
         layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center all elements
         
-        # Label with instructions
+        # Add instructional label
         self.drop_label = QLabel("Drag and drop policy documents here\nor")
         self.drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.drop_label)
         
-        # Browse button as an alternative
+        # Add browse button as alternative to drag/drop
         self.browse_button = QPushButton("Browse Files")
-        self.browse_button.setMaximumWidth(150)
-        self.browse_button.clicked.connect(self.browse_files)
+        self.browse_button.setMaximumWidth(150)  # Limit width for better appearance
+        self.browse_button.clicked.connect(self.browse_files)  # Connect click handler
         layout.addWidget(self.browse_button, alignment=Qt.AlignmentFlag.AlignCenter)
         
     def dragEnterEvent(self, event: QDragEnterEvent):
-        """Handle drag enter events."""
+        """Handle drag enter events.
+        
+        Called when a drag operation enters the widget's bounds.
+        Changes the visual style to indicate the widget is ready to accept the drop
+        and accepts the drag action if it contains file URLs.
+        
+        Args:
+            event: The QDragEnterEvent containing drag data and state
+            
+        Visual Changes:
+            - Background changes to light blue
+            - Border becomes blue and dashed
+            
+        Note:
+            Only accepts the drag if it contains URLs, which typically represent files
+            in a drag and drop operation. This prevents accepting invalid drops.
+        """
+        # Check if the drag operation contains file URLs
         if event.mimeData().hasUrls():
+            # Accept the drag operation
             event.acceptProposedAction()
+            
+            # Update visual style to indicate active drag state
             self.setStyleSheet(
                 "QFrame {"
-                "  background-color: #e8f4fc;"
-                "  border: 2px dashed #3498db;"
-                "  border-radius: 5px;"
+                "  background-color: #e8f4fc;"  # Light blue background
+                "  border: 2px dashed #3498db;"  # Blue dashed border
+                "  border-radius: 5px;"  # Maintain rounded corners
                 "}"
             )
         
     def dragLeaveEvent(self, event):
-        """Handle drag leave events."""
+        """Handle drag leave events.
+        
+        Called when a drag operation leaves the widget's bounds.
+        Restores the widget to its normal visual style.
+        
+        Args:
+            event: The dragLeaveEvent (not used but required by override)
+            
+        Visual Changes:
+            - Restores light gray background
+            - Restores gray dashed border
+            - Maintains hover effect for better UX
+            
+        Note:
+            This provides immediate visual feedback that the drop target
+            is no longer active, improving user experience during drag operations.
+        """
+        # Restore the normal visual style with hover effect
         self.setStyleSheet(
             "QFrame {"
-            "  background-color: #f0f0f0;"
-            "  border: 2px dashed #aaaaaa;"
-            "  border-radius: 5px;"
+            "  background-color: #f0f0f0;"  # Light gray background
+            "  border: 2px dashed #aaaaaa;"  # Gray dashed border
+            "  border-radius: 5px;"  # Maintain rounded corners
             "}"
             "QFrame:hover {"
-            "  border-color: #3498db;"
+            "  border-color: #3498db;"  # Blue border on hover
             "}"
         )
         
     def dropEvent(self, event: QDropEvent):
-        """Process dropped files."""
+        """Process dropped files.
+        
+        Called when files are dropped onto the widget.
+        Extracts file paths from the drop event, filters for actual files,
+        and passes valid file paths to the main application for processing.
+        
+        Args:
+            event: The QDropEvent containing the dropped data
+            
+        Processing Steps:
+            1. Restore normal visual style
+            2. Extract URLs from the drop data
+            3. Convert URLs to local file paths
+            4. Filter to include only actual files (not directories)
+            5. Pass valid file paths to main application
+            
+        Note:
+            - Directories are ignored
+            - Empty drops are silently handled (no files processed)
+            - Processing is delegated to the main application
+            - Visual state is reset regardless of drop validity
+        """
+        # Restore normal visual style immediately
         self.setStyleSheet(
             "QFrame {"
-            "  background-color: #f0f0f0;"
-            "  border: 2px dashed #aaaaaa;"
-            "  border-radius: 5px;"
+            "  background-color: #f0f0f0;"  # Light gray background
+            "  border: 2px dashed #aaaaaa;"  # Gray dashed border
+            "  border-radius: 5px;"  # Maintain rounded corners
             "}"
             "QFrame:hover {"
-            "  border-color: #3498db;"
+            "  border-color: #3498db;"  # Blue border on hover
             "}"
         )
         
+        # Process the dropped files if they contain URLs
         if event.mimeData().hasUrls():
-            event.acceptProposedAction()
+            event.acceptProposedAction()  # Accept the drop action
             file_paths = []
+            
+            # Extract file paths from URLs
             for url in event.mimeData().urls():
-                file_path = url.toLocalFile()
+                file_path = url.toLocalFile()  # Convert URL to local path
+                # Only include actual files, not directories
                 if os.path.isfile(file_path):
                     file_paths.append(file_path)
             
+            # Pass collected file paths to main application for processing
             if file_paths:
                 self.main_app.process_files(file_paths)
 
     def browse_files(self):
-        """Open file dialog to select files."""
+        """Open file dialog to select policy files.
+        
+        Presents a file selection dialog allowing the user to choose
+        one or more policy files for validation. Selected files are
+        passed to the main application for processing.
+        
+        Dialog Features:
+            - Multiple file selection enabled
+            - File type filtering for supported formats
+            - Native OS file dialog appearance
+            
+        Processing:
+            - Selected files are passed to main_app.process_files()
+            - No processing is done if dialog is canceled or no files selected
+            
+        Note:
+            This provides an alternative to drag-and-drop for users who
+            prefer traditional file selection or when drag-and-drop is
+            not convenient (e.g., files in different folders).
+        """
+        # Create file dialog with multiple file selection
         file_dialog = QFileDialog()
         file_dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
+        
+        # Set name filter to show only supported document types
         file_dialog.setNameFilter("Documents (*.pdf *.docx *.doc *.txt)")
         
+        # Show dialog and process selected files if any
         if file_dialog.exec():
             file_paths = file_dialog.selectedFiles()
             if file_paths:
+                # Pass selected files to main application
                 self.main_app.process_files(file_paths)
 
 
@@ -725,74 +896,196 @@ class PolicyValidatorApp(QMainWindow):
             file_info['valid'] = False
             file_info['issues'].append(f"Error validating file: {str(e)}")
     
-    def _validate_pdf_policy(self, file_info):
-        """Validate a PDF policy file.
+    def _validate_pdf_policy(self, file_info: Dict[str, Any]) -> None:
+        """Validate a PDF policy file against the current standard.
         
-        Note: Current implementation is a placeholder.
+        Extracts and analyzes text content from PDF files, checking for
+        compliance with the selected validation standard.
+        
+        Args:
+            file_info: Dictionary containing file information and validation state
+        
+        Implementation Details:
+            - Currently a basic implementation with size validation
+            - Falls back to text-based validation after basic checks
+            - Updates file_info with validation results and issues
+        
+        PDF Processing Workflow:
+            1. Basic file size sanity check
+            2. (Future) Text extraction using PyPDF2
+            3. (Future) Document structure analysis
+            4. (Future) Metadata extraction and validation
+            5. (Future) Table and image content analysis
+            
+        Error Handling:
+            - Catches all exceptions during validation
+            - Marks file as invalid on error
+            - Adds detailed error message to issues list
+            
+        Note:
+            Current implementation is a placeholder.
+            
         TODO: Implement full PDF text extraction and validation:
             - Extract text content using PyPDF2
-            - Process document structure
-            - Handle text encoding
-            - Extract metadata
-            - Process embedded tables
+            - Process document structure (headers, sections)
+            - Handle text encoding and special characters
+            - Extract and validate document metadata
+            - Process embedded tables and structured content
+            - Handle password-protected PDFs with warning
+            - Support PDF/A validation for compliance
         """
         try:
+            # Basic size sanity check
             # In a real implementation, we would extract text from PDF
             # and validate it. For now, we'll just check file size.
             if file_info['size'] < 1000:
                 file_info['issues'].append("PDF file is suspiciously small")
             
-            # Simulate a basic validation
+            # Simulate a basic validation using text validation
+            # This will be replaced with PDF-specific validation
             self._validate_text_policy(file_info)
             
         except Exception as e:
+            # Mark file as invalid on any error
             file_info['valid'] = False
             file_info['issues'].append(f"Error validating PDF: {str(e)}")
     
-    def _validate_word_policy(self, file_info):
-        """Validate a Word document policy file.
+    def _validate_word_policy(self, file_info: Dict[str, Any]) -> None:
+        """Validate a Word document policy file against the current standard.
         
-        Note: Current implementation is a placeholder.
+        Extracts and analyzes content from Word documents (.doc, .docx), checking for
+        compliance with the selected validation standard.
+        
+        Args:
+            file_info: Dictionary containing file information and validation state
+                
+        Implementation Details:
+            - Currently a basic implementation with size validation
+            - Falls back to text-based validation after basic checks
+            - Updates file_info with validation results and issues
+            - Handles both .doc and .docx formats
+            
+        Word Document Processing Workflow:
+            1. Basic file size sanity check
+            2. (Future) Text extraction using python-docx
+            3. (Future) Document structure analysis using styles
+            4. (Future) Heading level extraction for section identification
+            5. (Future) Table and list content processing
+            
+        Error Handling:
+            - Catches all exceptions during validation
+            - Marks file as invalid on error
+            - Adds detailed error message to issues list
+            
+        Note:
+            Current implementation is a placeholder.
+            
+        Format Support:
+            - .docx: Full support using python-docx
+            - .doc: Limited support, may require conversion
+            
         TODO: Implement full Word document processing:
-            - Extract text using python-docx
-            - Process document structure
-            - Handle formatting
-            - Extract headers/sections
-            - Process tables and lists
+            - Extract text using python-docx library
+            - Process document structure (styles, headings)
+            - Handle rich text formatting and styles
+            - Extract headers and sections based on heading styles
+            - Process tables, lists, and other structured content
+            - Support for embedded images and diagrams
+            - Handle Word-specific features like comments and revisions
         """
         try:
+            # Basic size sanity check
             # In a real implementation, we would extract text from Word doc
             # and validate it. For now, we'll just check file size.
             if file_info['size'] < 1000:
                 file_info['issues'].append("Word document is suspiciously small")
             
-            # Simulate a basic validation
+            # Simulate a basic validation using text validation
+            # This will be replaced with Word-specific validation
             self._validate_text_policy(file_info)
             
         except Exception as e:
+            # Mark file as invalid on any error
             file_info['valid'] = False
             file_info['issues'].append(f"Error validating Word document: {str(e)}")
     
-    def clear_all(self):
-        """Clear all loaded files and status area."""
+    def clear_all(self) -> None:
+        """Clear all loaded files and validation status.
+        
+        Resets the application state by:
+        - Clearing the list of loaded files
+        - Clearing the status area text
+        - Disabling the validate button
+        - Logging a status message
+        
+        User Interface Effects:
+            - Status area is emptied except for the "All files cleared" message
+            - Validate button becomes disabled until new files are loaded
+            - No change to standard selection or section checkboxes
+            
+        State Reset:
+            - loaded_files list is emptied
+            - Previously validated files are forgotten
+            - Validation results are cleared
+            
+        Note:
+            This provides a clean slate for users to start a new validation
+            session without needing to restart the application.
+        """
+        # Clear the internal file list
         self.loaded_files = []
+        
+        # Clear the status display area
         self.status_area.clear()
+        
+        # Disable the validate button since no files are loaded
         self.validate_button.setEnabled(False)
+        
+        # Log a status message confirming the action
         self.log_status("All files cleared.")
 
 
-def main() -> None:
+def run_application() -> int:
     """Initialize and run the application.
-
-    Entry point for the policy validator application. Creates the QApplication
-    instance and main window, then starts the event loop.
-
+    
+    Creates the QApplication instance and main window, then starts the event loop.
+    This function can be called programmatically from other modules.
+    
     Returns:
-        None. Application runs until window is closed."""
+        int: Application exit code (0 for normal exit)
+        
+    Example:
+        >>> from policy_validator.main import run_application
+        >>> exit_code = run_application()
+    """
     app = QApplication(sys.argv)
     window = PolicyValidatorApp()
     window.show()
-    sys.exit(app.exec())
+    return app.exec()
+
+
+def main() -> None:
+    """Command-line entry point for the policy validator application.
+    
+    This function is the entry point when the module is run directly.
+    It calls run_application() and exits with the returned status code.
+    
+    Returns:
+        None. Application runs until window is closed.
+        
+    Command-line Usage:
+        $ python -m policy_validator.main
+        
+    Exit Codes:
+        0: Normal exit
+        1+: Error conditions (Qt-specific error codes)
+        
+    Note:
+        This function is registered as a console_scripts entry point
+        in setup.py, allowing the application to be launched with
+        the command 'policy-validator'.
+    """
+    sys.exit(run_application())
 
 
 if __name__ == "__main__":
