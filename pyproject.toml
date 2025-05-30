@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "policy_validator"
+version = "0.1.0"
+description = "A tool to validate cybersecurity policies against standards and best practices"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Author", email = "author@example.com"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "PyQt6",
+    "python-docx",
+    "PyPDF2",
+    "watchdog",
+    "python-magic",
+    "markdown",
+    "requests",
+    "python-dotenv",
+]
+
+[project.scripts]
+policy-validator = "policy_validator.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+

@@ -1,0 +1,8 @@
+PyQt6
+python-docx
+PyPDF2
+watchdog
+python-magic
+markdown
+requests
+python-dotenv

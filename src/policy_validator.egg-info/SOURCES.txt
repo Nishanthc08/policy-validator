@@ -1,0 +1,16 @@
+pyproject.toml
+src/policy_validator/__init__.py
+src/policy_validator/main.py
+src/policy_validator.egg-info/PKG-INFO
+src/policy_validator.egg-info/SOURCES.txt
+src/policy_validator.egg-info/dependency_links.txt
+src/policy_validator.egg-info/entry_points.txt
+src/policy_validator.egg-info/requires.txt
+src/policy_validator.egg-info/top_level.txt
+src/policy_validator/parsers/__init__.py
+src/policy_validator/parsers/docx_parser.py
+src/policy_validator/parsers/pdf_parser.py
+src/policy_validator/utils/__init__.py
+src/policy_validator/utils/file_watcher.py
+src/policy_validator/validators/__init__.py
+src/policy_validator/validators/base_validator.py

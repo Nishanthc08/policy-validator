@@ -1,0 +1,2 @@
+[console_scripts]
+policy-validator = policy_validator.main:main

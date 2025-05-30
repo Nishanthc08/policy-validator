@@ -1,0 +1,36 @@
+# ACME Corporation Cybersecurity Policy
+
+## 1. Purpose and Scope
+This policy establishes guidelines for protecting ACME Corporation's information assets and technology infrastructure. It applies to all employees, contractors, and third parties with access to company systems.
+
+## 2. Password Policy
+2.1 All passwords must be at least 12 characters long
+2.2 Passwords must contain a mix of uppercase, lowercase, numbers, and special characters
+2.3 Passwords must be changed every 90 days
+2.4 Previous 8 passwords cannot be reused
+2.5 Multi-factor authentication is required for all administrative accounts
+
+## 3. Data Protection
+3.1 All sensitive data must be encrypted both in transit and at rest
+3.2 Customer personally identifiable information (PII) must be stored only in approved systems
+3.3 Data must be classified according to sensitivity levels: Public, Internal, Confidential, Restricted
+3.4 Regular data backups must be performed and tested quarterly
+
+## 4. Access Control
+4.1 Access to systems and data must follow the principle of least privilege
+4.2 All access must be reviewed quarterly by department managers
+4.3 User accounts must be disabled immediately upon employee termination
+4.4 Privileged access requires management approval and additional monitoring
+
+## 5. Incident Response
+5.1 All security incidents must be reported to the Security Operations Center within 1 hour
+5.2 A designated Incident Response Team will coordinate all response activities
+5.3 Regular incident response drills must be conducted semi-annually
+5.4 Post-incident reviews must be documented and used to improve security controls
+
+## 6. Compliance
+6.1 Annual security awareness training is mandatory for all staff
+6.2 Quarterly compliance assessments will be conducted by the Security team
+6.3 Third-party security assessments must be performed annually
+6.4 Non-compliance may result in disciplinary action
+

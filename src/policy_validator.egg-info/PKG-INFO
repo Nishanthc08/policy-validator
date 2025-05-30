@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: policy_validator
+Version: 0.1.0
+Summary: A tool to validate cybersecurity policies against standards and best practices
+Author-email: Author <author@example.com>
+License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: PyQt6
+Requires-Dist: python-docx
+Requires-Dist: PyPDF2
+Requires-Dist: watchdog
+Requires-Dist: python-magic
+Requires-Dist: markdown
+Requires-Dist: requests
+Requires-Dist: python-dotenv

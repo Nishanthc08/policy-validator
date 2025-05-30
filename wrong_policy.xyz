@@ -1,0 +1,13 @@
+ORGANIZATION SECURITY POLICY
+
+This document contains security policies with an unsupported file extension.
+
+1. Access Control
+All users must use multi-factor authentication.
+
+2. Device Management
+All devices must be encrypted.
+
+3. Network Security
+VPN must be used for remote access.
+
